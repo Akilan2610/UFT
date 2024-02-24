@@ -1,0 +1,416 @@
+Public GTCName
+Public resultFolder
+Public exportSheetName,GScreenShotCounter,GScreenShotName
+'*********************************************************************************************************************
+'Name			: lookup
+'Authore		: Akilan Palani
+'Creation Date	: 30-Jan-2018
+'Purpose		: get the value from datatable
+'*********************************************************************************************************************
+Function lookup(Tab,strType)
+	Set colCollection = CreateObject("Scripting.Dictionary")
+	Set Table = DataTable.GetSheet(Tab)
+	Table.SetCurrentRow(1)
+	blnFound = False
+	For intRow = 0 To Table.GetRowCount
+		strCellData = Trim(DataTable("Type",Tab))
+		If LCase(strCellData) = LCase(Trim(strType)) Then
+			blnFound = True
+			For intCol = 1 To Table.GetParameterCount
+				Set objParameter = Table.GetParameter(intCol)
+				colCollection.Add objParameter.Name, objParameter.Value				
+			Next
+			Exit For
+		End If
+		Table.SetNextRow
+	Next
+	Set lookup = colCollection
+	If Not blnFound Then
+		lookup = ""
+	End If	
+	Set colCollection = Nothing
+	Set Table = Nothing
+	Set objParameter = Nothing
+End Function
+'*********************************************************************************************************************
+'Name			: captureImage
+'Authore		: Akilan Palani
+'Creation Date	: 30-Jan-2018
+'Purpose		: To take the screenshot
+'*********************************************************************************************************************
+Function captureImange(obj,fileName)	
+	'strTime = Month(Now) & Day(Now) & Hour(Time) & Minute(Time) & Second(Time)
+	strTime = strDateTime
+	specialChars = "*,(,),&,>,<,/,#,.,%,-,'"
+	specialArray = Split(specialChars,",")
+	SplitCharacters = ";;;"
+	For k = 1 To UBound(specialArray)
+		fileName = Replace(fileName,specialArray(k),"")
+	Next
+	GScreenShotCounter = GScreenShotCounter + 1
+	If Len(CStr(GScreenShotCounter)) < 10 Then
+		GScreenShotCounter = 0 & GScreenShotCounter
+	End If
+	strfileName = resultFolder & GScreenShotCounter & "_" &fileName & strTime
+	obj.CaptureBitmap strfileName & ".png"
+	If GScreenShotCounter > 1 Then
+		GScreenShotName = GScreenShotName & SplitCharacters & GScreenShotCounter & "_" & fileName & strTime & ".png"
+	Else 
+		GScreenShotName = GScreenShotCounter & "_" & fileName & strTime & ".png"
+	End If
+End Function
+'*********************************************************************************************************************
+'Name			: GupdateScreenShotsNameToDataSheet
+'Authore		: Akilan Palani
+'Creation Date	: 06-Feb-2018
+'Purpose		: To write Additional Details
+'*********************************************************************************************************************
+Function GupdateScreenShotsNameToDataSheet(sheetName,currentRow)
+	On Error Resume Next
+	val = DataTable.Value("screenShotName",sheetName)
+	If Err.Number <> 0 Then
+		DataTable.GetSheet(sheetName).AddParameter "screenShotName",""
+	End If
+		DataTable.GetSheet(sheetName).SetCurrentRow(currentRow)
+		DataTable.Value("screenShotName",sheetName) = GScreenShotName
+		GScreenShotName = ""
+		GScreenShotCounter = 0
+	On Error goto 0
+End Function
+'*********************************************************************************************************************
+'Name			: writeAdditionalDetails
+'Authore		: Akilan Palani
+'Creation Date	: 06-Feb-2018
+'Purpose		: To write Additional Details
+'*********************************************************************************************************************
+Function writeAdditionalDetails(ByRef thisObjFile,sHeader,sVal,LFlag)
+	On Error Resume Next
+	If LFlag = 1 Then
+		thisObjFile.WriteLine "<font color=Maroon face=Consolas size=3><b>" & sHeader & "</b>" & sVal & "</font><hr>"
+	Else 
+		thisObjFile.WriteLine "<font color=Maroon face=Consolas size=3><b>" & sHeader & "</b>" & sVal & "</font><hr>"
+	End If
+	On Error goto 0
+End Function
+'*********************************************************************************************************************
+'Name			: writeHTMLHeaders
+'Authore		: Akilan Palani
+'Creation Date	: 06-Feb-2018
+'Purpose		: To write HTML Headers
+'*********************************************************************************************************************
+Function writeHTMLHeaders(ByRef thisObjFile,AppName,TCName,Module)
+	On Error Resume Next
+	thisObjFile.WriteLine "<html><h2 align=center><font=Courier New>Automation Execution - Report Log</font></h2><chr>"
+	thisObjFile.WriteLine "<font color=Maroon face=Consolas size=3><b>Application Name : </b>" & AppName & "</font><br>"
+	thisObjFile.WriteLine "<font color=Maroon face=Consolas size=3><b>Test Case Name : </b>" & TCName & "</font><br>"
+	thisObjFile.WriteLine "<font color=Maroon face=Consolas size=3><b>Description : </b>" & Module & "</font><br>"
+	thisObjFile.WriteLine "<font color=Maroon face=Consolas size=3><b>Organization : </b>Oraganization Name</font><br>"
+	thisObjFile.WriteLine "<Table Border Width=100%>" & vbCrLf &_
+	"<tr>" & vbCrLf &_
+	"<th BGCOLOR= '#003366' width=30%><font color=white face=Cambria size=3>Step Description</font></th>" & vbCrLf &_
+	"<th BGCOLOR= '#003366' width=30%><font color=white face=Cambria size=3>Expected Result</font></th>" & vbCrLf &_
+	"<th BGCOLOR= '#003366' width=30%><font color=white face=Cambria size=3>Actual Result</font></th>" & vbCrLf &_
+	"<th BGCOLOR= '#003366' width=30%><font color=white face=Cambria size=3>Execution Status</font></th>" & vbCrLf &_
+	"<th BGCOLOR= '#003366' width=30%><font color=white face=Cambria size=3>Time (IST)</font></th>" & vbCrLf &_
+	"</tr>" & vbCrLf
+	On Error goto 0	
+End Function
+'*********************************************************************************************************************
+'Name			: writeHTMLMessage
+'Authore		: Akilan Palani
+'Creation Date	: 06-Feb-2018
+'Purpose		: To write HTML Message
+'*********************************************************************************************************************
+Function writeHTMLMessage(ByRef thisObjFile,ByRef thisDescription,ByRef ExpResult,ByRef ActResult,ByRef thisStepStatus)
+	status = UCase(thisStepStatus)
+	Select Case status
+		Case "PASS"
+			thisObjFile.WriteLine "<Tr><Td><Font color=green face=Consolas size=2>" & thisDescription & "</font></Td>" & vbCrLf &_
+			"<Td><Font color=green face=Consolas size=2>" & ExpResult & "</font></Td>" & vbCrLf &_
+			"<Td><Font color=green face=Consolas size=2>" & ActResult & "</font></Td>" & vbCrLf &_
+			"<Td ALIGN=CENTER><Font color=green face=Consolas size=2>" & status & "</font></Td>" & vbCrLf &_
+			"<Td ALIGN=CENTER><Font color=green face=Consolas size=2>" & Now & "</font></Td>" & vbCrLf
+		
+		Case "FAIL"
+			thisObjFile.WriteLine "<Tr><Td><Font color=#FF2600 face=Consolas size=2>" & thisDescription & "</font></Td>" & vbCrLf &_
+			"<Td><Font color=#FF2600 face=Consolas size=2>" & ExpResult & "</font></Td>" & vbCrLf &_
+			"<Td><Font color=#FF2600 face=Consolas size=2>" & ActResult & "</font></Td>" & vbCrLf &_
+			"<Td ALIGN=CENTER><Font color=#FF2600 face=Consolas size=2>" & status & "</font></Td>" & vbCrLf &_
+			"<Td ALIGN=CENTER><Font color=#FF2600 face=Consolas size=2>" & Now & "</font></Td>" & vbCrLf
+		
+		Case "INFO"
+			thisObjFile.WriteLine "<Tr><Td COLSPAN = 5 BGCOLOR='#808080' ALIGN=CENTER><Font color=#000000 Consolas " &_
+			"SIZE=4><b>" & thisDescription & "</b></font></td></tr>"
+	End Select
+End Function
+'*********************************************************************************************************************
+'Name			: exportSheetToReport
+'Authore		: Akilan Palani
+'Creation Date	: 06-Feb-2018
+'Purpose		: To export Sheet To Report
+'*********************************************************************************************************************
+Function exportSheetToReport(resultFolder,sheetName)
+	DataTable.ExportSheet resultFolder,sheetName
+End Function
+'*********************************************************************************************************************
+'Name			: exportSheetToReport
+'Authore		: Akilan Palani
+'Creation Date	: 13-Feb-2018
+'Purpose		: To export Sheet To Report
+'*********************************************************************************************************************
+Function htmlFileName(resultFolder,GTCName)
+	fname = DataTable.Value("TC No",exportSheetName)
+	strDDTT = strDateTime
+	htmlfullFileName = resultFolder & Mid(fname,3) & "_" & GTCName & strDDTT
+	htmlFileName = htmlfullFileName
+End Function
+'*********************************************************************************************************************
+'Name			: strDateTime
+'Authore		: Akilan Palani
+'Creation Date	: 13-Feb-2018
+'Purpose		: To get the current date and time ( YYYYMMDDHHMMSS )
+'*********************************************************************************************************************
+Function strDateTime()
+	If Len(Month(Now)) = 1 Then
+		mm = "0" & Month(Now)
+	Else 
+		mm = Month(Now)
+	End If
+	If Len(Day(Now)) = 1 Then
+		dd = "0" & Day(Now)
+	Else 
+		dd = Day(Now)
+	End If
+	If Len(Hour(Time)) = 1 Then
+		hh = "0" & Hour(Time)
+	Else 
+		hh = Hour(Time)
+	End If
+	If Len(Minute(Time)) = 1 Then
+		min = "0" & Minute(Time)
+	Else 
+		min = Minute(Time)
+	End If
+	If Len(Second(Time)) = 1 Then
+		ss = "0" & Second(Time)
+	Else 
+		ss = Second(Time)
+	End If
+	strTime = Year(Now) & mm & dd & hh & min & ss
+	strDateTime = strTime
+End Function
+'*********************************************************************************************************************
+'Name			: captureScreensInWordDoc
+'Authore		: Akilan Palani
+'Creation Date	: 13-Feb-2018
+'Purpose		: To put all screenshots capyured at test case level into a single document
+'*********************************************************************************************************************
+Function captureScreensInWordDoc(sheetName,fileName,currentRow)
+	strSourceName = Split(DataTable.Value("screenShotName",sheetName),";;;")
+	Set objWord = CreateObject("Word.Application")
+	objWord.Visible = False
+	objWord.DisplayAlerts = 0
+	Set objDoc = objWord.Documents.Add()
+	Set objSelection = objWord.Selection
+	Set objShape = objDoc.Shapes
+	Set objrange = objDoc.Range()
+	Set objShape = objDoc.InlineShapes
+	For i = 0 To UBound(strSourceName)
+		objSelection.TypeText strSourceName(i) & vbCrLf
+		objShape.AddPicture resultFolder & strSourceName(i)
+	Next
+	objDoc.SaveAs fileName & ".docx"
+	objDoc.Close
+	'delete the screenshots from folder
+	Set fso = CreateObject("Scripting.FileSystemObject")
+	For j = 0 To UBound(strSourceName)
+		If fso.FileExists(resultFolder&strSourceName(j)) Then
+			fso.DeleteFile(resultFolder&strSourceName(j))
+		End If		
+	Next
+	Set fso = Nothing
+	Set objDoc = Nothing
+	Set objSelection = Nothing
+	Set objShape = Nothing
+	Set objrange = Nothing
+	Set objShape = Nothing
+End Function
+'*********************************************************************************************************************
+'Name			: formatResultFile
+'Authore		: Akilan Palani
+'Creation Date	: 20-Feb-2018
+'Purpose		: To format the Result File
+'"http://www.tek-tips.com/viewthread.cfm?qid=159373
+'*********************************************************************************************************************
+Function formatResultFile(objFile,obSheet)
+	On Error resume next
+	Set obExcel = CreateObject("Excel.Application")
+	Set objBook = obExcel.Workbooks.Open(objFile)
+	Set objSheet = objBook.Sheets.Item(obSheet)
+	rowcount = objSheet.UsedRange.Rows.Count
+	colcount = objSheet.UsedRange.Columns.Count
+	'Header Align
+	objSheet.Rows(1).Font.Bold = True	
+	objSheet.Range("A1:H1").Interior.ColorIndex= 48
+	
+	objSheet.Range("A1:H"&rowcount).Borders.Color = 1
+	objSheet.Rows.RowHeight = 25
+	
+	objSheet.Columns("E").Autofit
+	objSheet.Columns("C:E").HorizontalAlignment  = -4108		
+	objSheet.Columns("F").ColumnWidth = 40
+	objSheet.Columns("H").ColumnWidth = 25
+	objSheet.Columns("H").Font.Color = 1 
+	objSheet.Columns("H").WrapText = True
+	 
+	For i = 2 To rowcount
+		For j = 4 To 4
+			strcel = objSheet.Cells(i,j)
+			If InStr(UCase(strcel),"PASS") <> 0 Then
+				objSheet.Cells(i,j).Interior.ColorIndex = 50 'green
+				objSheet.Cells(i,j).Font.Bold = True
+			ElseIf InStr(UCase(strcel),"FAIL") <> 0 Then
+				objSheet.Cells(i,j).Interior.ColorIndex = 3 'red
+				objSheet.Cells(i,j).Font.Bold = True
+			End If
+		Next
+	Next	
+	objBook.Save
+	objBook.Close
+	obExcel.Quit
+	Set obExcel = Nothing
+	Set objBook = Nothing
+	Set objSheet = Nothing
+	On Error goto 0
+End Function
+'*********************************************************************************************************************
+'Name			: ReadXL_DBRuntime
+'Authore		: Akilan Palani
+'Creation Date	: 16-Feb-2018
+'Purpose		: retrive the data from excel DB
+'*******************
+'QueryPart = "SELECT [TC No],[TC Name],[Status],[Result],[Time],[FuntionKey] FROM [<table>$] where [TC No]='TC01'"
+'tem = ReadXL_DBRuntime("D:\Users\C962533\Desktop\UFT\Html_Report\","way2Automation_Result","way2automation_TC",QueryPart)
+'ro= Split(tem,":::")
+'For i = 0 To UBound(ro)
+'	MsgBox ro(i)
+'Next
+'*********************************************************************************************************************
+Function ReadXL_DBRuntime(TestDataPath,XL_DBFName,SheetName,QueryPart)	
+	On Error Resume Next
+	
+	Set objCon = CreateObject("ADODB.Connection")
+	Set objRecordSet = CreateObject("ADODB.Recordset")
+	
+	strExlFile = TestDataPath & XL_DBFName &".xls"
+	connstr = "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" &strExlFile & ";Extended Properties=""Excel 8.0;HDR=Yes"";"
+	objCon.Open connstr	
+	
+	strSQLStatement = Replace(QueryPart,"<table>",SheetName)
+	
+	objRecordSet.Open strSQLStatement, objCon 'create recordset
+	objCon.Execute strSQLStatement
+	colCount = objRecordSet.Fields.count    'No of columns in the table
+	
+	Do until objRecordSet.EOF
+	  	rowCnt =rowCnt +1
+		objRecordSet.MoveNext
+	Loop
+	
+	objRecordSet.Requery
+
+	countval =0
+	For row =1 to rowCnt
+		DataXL_col = ""
+		For i=0 to colCount-1
+			If  objRecordSet.fields(i) <> "" and i = 0 Then					
+				DataXL_col =  DataXL_col  & Cstr(objRecordSet.fields(i))	
+			Else 
+				DataXL_col =  DataXL_col & "~" & Cstr(objRecordSet.fields(i))			
+			End If
+		Next 
+			DataXL_temp =  DataXL_col
+			If row = 1 Then
+				DataXL_row = DataXL_row  & DataXL_temp
+			Else 
+				DataXL_row = DataXL_row & ":::" & DataXL_temp
+			End If				
+		objRecordSet.MoveNext
+	Next
+
+	Set objRecordSet = Nothing
+	objCon.Close
+	Set objCon = Nothing
+
+	ReadXL_DBRuntime = DataXL_row
+	On Error goto 0
+End Function
+'*********************************************************************************************************************
+'Name			: Get_SingleDB_Data
+'Authore		: Akilan Palani
+'Creation Date	: 16-Feb-2018
+'Purpose		: retrive the data from Oracle DB
+'*******************
+'stcon = "Provider=OraOLEDB.Oracle; Data Source=(DESCRIPTION=(CID=ILOS5SPE)(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=10.64.68.90)(PORT=1521)))(CONNECT_DATA=(SERVICE_NAME=ILOS5SPE.BOI.COM))); User Id=C962533;Password=password45#;"
+'strQuery = "select id,rowupdatedate from transactions where id='160d4cad49707ffImp2'"
+''strQuery="select id,rowupdatedate,accountname,iban from transactions where accountname='Ross' and iban='IE92BOFI90001'"
+'ro = Get_SingleDB_Data(stcon,strQuery)
+'
+'ro= Split(ro,":::")
+'For i = 0 To UBound(ro)
+'	MsgBox ro(i)
+'Next
+'*********************************************************************************************************************
+Public Function Get_SingleDB_Data(strConnString,strQuery)
+
+	On Error Resume Next
+	
+    Set objADODBConn = CreateObject("ADODB.Connection")
+	Set objRS = CreateObject("ADODB.RecordSet")
+	objADODBConn.Open strConnString	
+
+	Set objRecordSet = objADODBConn.Execute(strQuery)
+
+	For i=1 to 15 ' waiting to get the record in db
+		If  objRecordSet.EOF = True Then
+			Wait(2)
+			Set objRecordSet = objADODBConn.Execute(strQuery)
+		Else
+			Exit For
+		End If	
+	Next
+
+	Do until objRecordSet.EOF
+	  	rowCnt =rowCnt +1
+		objRecordSet.MoveNext
+	Loop
+	
+	objRecordSet.Requery
+	colCount = objRecordSet.Fields.Count
+
+	For row =1 to rowCnt
+		DataXL_col = ""
+		For i=0 to colCount-1
+			If  objRecordSet.fields(i).Value <> "" and i = 0 Then					
+				DataXL_col =  DataXL_col  & Cstr(objRecordSet.fields(i).Value)	
+			Else 
+				DataXL_col =  DataXL_col & "~" & Cstr(objRecordSet.fields(i).Value)			
+			End If
+		Next 
+			DataXL_temp =  DataXL_col
+			If row = 1 Then
+				DataXL_row = DataXL_row  & DataXL_temp
+			Else 
+				DataXL_row = DataXL_row & ":::" & DataXL_temp
+			End If				
+		objRecordSet.MoveNext
+	Next
+
+	objADODBConn.Close
+	Set objRecordSet = Nothing
+	Set objRS = Nothing
+	Set objADODBConn = Nothing
+
+Get_SingleDB_Data = DataXL_row
+On Error goto 0
+End Function
