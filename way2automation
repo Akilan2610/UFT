@@ -1,0 +1,211 @@
+'*********************************************************************************************************************
+'Name			: way2automation
+'Authore		: Akilan Palani
+'Creation Date	: 30-Jan-2018
+'Purpose		: main function for vivit application
+'*********************************************************************************************************************
+Function way2automation()	
+
+	exportSheetName = "way2automation_TC"
+	Set tcDT = DataTable.GetSheet(exportSheetName)
+	rowCount = tcDT.GetRowCount		
+	
+	For TC_Iterator = 1 To rowCount
+		
+		tcDT.SetCurrentRow(TC_Iterator)		
+		tcStatus = DataTable.Value("Status",exportSheetName)
+		If UCase(Trim(tcStatus)) = "Y" Then
+		
+			Set lookupdata = lookup("Utility","URL")
+			Url = lookupdata.item("Value")
+			
+			Set lookupdata = lookup("Utility","ResultFolder")
+			resultFolder = lookupdata.item("Value")
+						
+			GTCName = DataTable.Value("TC Name",exportSheetName)
+			funCall = DataTable.Value("FuntionKey",exportSheetName)			
+			
+			Set fso = CreateObject("Scripting.FileSystemObject")
+			'Set thisObjFile = fso.CreateTextFile(resultFolder & GTCName & ".html",True,True)	
+			htmlFile = htmlFileName(resultFolder,GTCName)
+			Set thisObjFile = fso.CreateTextFile(htmlFile & ".html",True,True)
+			
+			Call writeHTMLHeaders(thisObjFile,"way2automation",GTCName,"")
+			Call writeAdditionalDetails(thisObjFile,"Application URL : ",Url,0)
+			Call writeAdditionalDetails(thisObjFile,"Environment : ","SIT",1)
+			
+			Select Case funCall
+				Case "LaunchApp"														'TC01,TC02
+					Call writeHTMLMessage(thisObjFile,"Launch Application","","","INFO")	
+					reason = reason & launchApp(Url,thisObjFile)
+					Call writeHTMLMessage(thisObjFile,"Close Application","","","INFO")
+					reason = reason & CreateDeal(thisObjFile)
+					reason = reason & VerifyDeal(thisObjFile)
+					reason = reason & DeleteDeal(thisObjFile)
+					reason = reason & CloseApp(thisObjFile)					
+				Case "LoginApp"
+					Call writeHTMLMessage(thisObjFile,"Launch Application","","","INFO")	
+					reason = reason & launchApp(Url,thisObjFile)
+					reason = reason & loginApp(thisObjFile)
+					Call writeHTMLMessage(thisObjFile,"Close Application","","","INFO")
+					reason = reason & CloseApp(thisObjFile)					
+				Case "GetElementCnt"
+					Call writeHTMLMessage(thisObjFile,"Launch Application","","","INFO")	
+					reason = reason & launchApp(Url,thisObjFile)
+					reason = reason & loginApp(thisObjFile)
+					reason = reason & fnGetWebelementCount(thisObjFile)
+					Call writeHTMLMessage(thisObjFile,"Close Application","","","INFO")
+					reason = reason & CloseApp(thisObjFile)
+			End Select	
+			If (InStr(UCase(reason),"FAIL") <> 0) Then
+				stepstatus = "Failed"
+			Else 
+				stepstatus = "Pass"
+			End If	
+			
+			DataTable.Value("Result",exportSheetName) = stepstatus
+			DataTable.Value("Time",exportSheetName) = CStr(Date & " " & Time)
+			DataTable.Value("Reason",exportSheetName) = Reason	
+			Reason = ""	
+			Call GupdateScreenShotsNameToDataSheet(exportSheetName,TC_Iterator)	
+			Call exportSheetToReport(resultFolder&"way2Automation_Result.xls",exportSheetName)
+			wordFile = htmlFileName(resultFolder,GTCName)
+			Call captureScreensInWordDoc(exportSheetName,wordFile,TC_Iterator)
+			Call formatResultFile(resultFolder&"way2Automation_Result.xls",exportSheetName)
+		End If			
+	Next	
+	'Call formatResultFile(resultFolder&"way2Automation_Result.xls",exportSheetName)
+	Set fso = Nothing
+	Set thisObjFile = Nothing
+End Function
+'*********************************************************************************************************************
+'Name			: launchApp
+'Authore		: Akilan Palani
+'Creation Date	: 06-Feb-2018
+'Purpose		: To launch the Application
+'*********************************************************************************************************************
+Function launchApp(Url,thisObjFile)
+	If Browser("Welcome").Exist(1) Then
+		SystemUtil.CloseProcessByName "Iexplore.exe"
+	Else 
+		SystemUtil.Run "Iexplore.exe", Url
+		Wait(5)
+		Set B = Browser("Welcome").Page("Welcome")
+		B.Sync
+		captureImange B, GTCName
+		reason = reason & "Pass: Application Launched Successfully" & vbNewLine
+		Call writeHTMLMessage(thisObjFile,"Launch Application","Application should launch","Application Launched Successfully","PASS")
+	End If
+	launchApp = reason
+End Function
+'*********************************************************************************************************************
+'Name			: loginApp
+'Authore		: Akilan Palani
+'Creation Date	: 06-Feb-2018
+'Purpose		: login the Application
+'*********************************************************************************************************************
+Function loginApp(thisObjFile)
+	Set lookupdata = lookup("Utility","UserName")
+	userName = lookupdata.item("Value")
+	Set lookupdata = lookup("Utility","Password")
+	pwd = lookupdata.item("Value")
+	Set B = Browser("Welcome").Page("Welcome")
+	B.Sync
+	If not B.Exist(1) Then
+		Call writeHTMLMessage(thisObjFile,"Login page","Login page should exist","Login page is not exist","FAIL")
+		reason = reason & "Failed: Login page is not exist" & vbNewLine
+	Else 
+		captureImange B,GTCName
+		B.WebElement("Draggable").Click
+		reason = reason & "Pass: Successfully Clicked WebElement" & vbNewLine
+		Call writeHTMLMessage(thisObjFile,"Click WebElement","WebElement should be clicked","Successfully Clicked WebElement","PASS")		
+		Set B1 = Browser("Welcome to the Test Site").Page("Welcome to the Test Site")
+		B1.Sync
+		If B1.Exist(1) Then
+			B1.Link("Signin").Click
+			reason = reason & "Pass: Successfully Clicked Signin link" & vbNewLine
+			B1.WebEdit("username").Set userName
+			reason = reason & "Pass: Successfully entered username" & vbNewLine
+			B1.WebEdit("password").SetSecure pwd
+			reason = reason & "Pass: Successfully entered password" & vbNewLine
+			captureImange B1,GTCName
+			B1.WebButton("Submit").Click
+			reason = reason & "Pass: Successfully Clicked Submit button" & vbNewLine
+			Call writeHTMLMessage(thisObjFile,"Login Application","Login should success","Successfully logged in","PASS")
+			reason = reason & "Pass: Successfully logged in" & vbNewLine
+			Wait 10	
+		End If		
+	End If
+	Set B1 = Nothing
+	Set B = Nothing
+	loginApp = reason
+End Function
+'*********************************************************************************************************************
+'Name			: CloseApp
+'Authore		: Akilan Palani
+'Creation Date	: 06-Feb-2018
+'Purpose		: logout the application
+'*********************************************************************************************************************
+Function CloseApp(thisObjFile)
+	Set B = Browser("Welcome").Page("Welcome")
+	If Not B.Exist(1) Then
+		
+	Else		
+		'SystemUtil.CloseProcessByName "Iexplore.exe"		
+		Browser("Welcome").CloseAllTabs
+		Set CW = Browser("Welcome to the Test Site").Dialog("Internet Explorer")
+		If CW.Exist(1) Then
+			CW.WinButton("Close all tabs").highlight
+			CW.WinButton("Close all tabs").Click
+		End If
+		Set CW = Nothing
+		Call writeHTMLMessage(thisObjFile,"Close Application","Application should Close","Application closed Successfully","PASS")
+		reason = reason & "Pass: Application closed Successfully" & vbNewLine
+	End If
+	Set B = Nothing
+	CloseApp = reason
+End Function
+''*********************************************************************************************************************
+''Name			: logoutApp
+''Authore		: Akilan Palani
+''Creation Date	: 06-Feb-2018
+''Purpose		: logout the application
+''*********************************************************************************************************************
+'Function logoutApp(thisObjFile)
+'	Set B = Browser("Vivit Worldwide").Page("Vivit Worldwide")
+'	If Not B.Exist(1) Then
+'		
+'	Else 
+'		B.Link("Sign Out").Click
+'		SystemUtil.CloseProcessByName "Iexplore.exe"
+'		reason = reason & writeHTMLMessage(thisObjFile,"Logout Application","Application should Logout","Application Logout Successfully","PASS")
+'	End If
+'	Set B = Nothing
+'	logoutApp = "Application launched"
+'End Function
+'*********************************************************************************************************************
+'Name			: fnGetWebelementCount
+'Authore		: Akilan Palani
+'Creation Date	: 06-Feb-2018
+'Purpose		: Get the Webelement Count
+'*********************************************************************************************************************
+Function fnGetWebelementCount(thisObjFile)
+	Set oDes = Description.Create
+	oDes("micClass").Value = "WebElement"
+	oDes("html tag").Value = "H2"
+	oDes("outerhtml").value = "<h2>.*"
+	Set objBrow = Browser("Welcome to the Test Site").Page("Welcome to the Test Site")
+	objBrow.Sync
+	Wait 5
+	Set oChild = objBrow.ChildObjects(oDes)
+	oCount = oChild.Count
+	captureImange objBrow,GTCName
+	Call writeHTMLMessage(thisObjFile,"Total number of webelement box","Count the number of webelement box","Total webelement box is : "&oCount,"PASS")
+	reason = reason & "Pass: Total webelement box is : " & oCount & vbNewLine
+	For i = 0 To oCount-1
+		objName = oChild(i).getRoProperty("innertext")
+		Call writeHTMLMessage(thisObjFile,"Get the Name of Object " & i+1 ,"Webelement Name should get","Webelement Name is: " & objName,"PASS")
+		reason = reason & "Pass: Webelement Name is: " & objName & vbNewLine
+	Next
+fnGetWebelementCount = 	reason
+End Function
